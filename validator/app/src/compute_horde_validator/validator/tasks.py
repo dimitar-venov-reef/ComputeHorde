@@ -901,8 +901,10 @@ def slash_collateral_task(self, job_uuid: str) -> None:
         job = OrganicJob.objects.select_related("miner").select_for_update().get(job_uuid=job_uuid)
 
         if job.slashed:
-            logger.info(f"Already slashed for this job {job_uuid}")
+            logger.info("Already slashed for this job %s", job_uuid)
             return
+
+        logger.info("Slashing collateral for job %s on miner %s", job_uuid, job.miner.hotkey)
 
         try:
             async_to_sync(collateral().slash_collateral)(
