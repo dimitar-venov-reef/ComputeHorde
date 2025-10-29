@@ -11,7 +11,11 @@ from django.conf import settings
 from django.utils.timezone import now
 from requests import Response
 
-from compute_horde_validator.validator.collateral.types import SlashCollateralError
+from compute_horde_validator.validator.collateral.types import (
+    NonceTooLowCollateralException,
+    ReplacementUnderpricedCollateralException,
+    SlashCollateralError,
+)
 from compute_horde_validator.validator.models import (
     AdminJobRequest,
     Cycle,
@@ -383,8 +387,14 @@ def test__check_missed_synthetic_jobs(settings, bittensor):
 
 
 @pytest.mark.django_db(databases=["default", "default_alias"], transaction=True)
-@pytest.mark.parametrize("error_message", ["replacement transaction underpriced", "nonce too low"])
-def test_slash_collateral_task_retriable_error_triggers_retry(settings, monkeypatch, error_message):
+@pytest.mark.parametrize(
+    "exception",
+    [
+        NonceTooLowCollateralException("Nonce too low"),
+        ReplacementUnderpricedCollateralException("replacement transaction underpriced"),
+    ],
+)
+def test_slash_collateral_task_retriable_error_triggers_retry(settings, monkeypatch, exception):
     settings.CELERY_TASK_ALWAYS_EAGER = True
     settings.CELERY_TASK_EAGER_PROPAGATES = True
 
@@ -398,7 +408,7 @@ def test_slash_collateral_task_retriable_error_triggers_retry(settings, monkeypa
     )
 
     mock_collateral = MagicMock()
-    mock_collateral.slash_collateral = AsyncMock(side_effect=SlashCollateralError(error_message))
+    mock_collateral.slash_collateral = AsyncMock(side_effect=exception)
     monkeypatch.setattr(
         "compute_horde_validator.validator.tasks.collateral",
         lambda: mock_collateral,
