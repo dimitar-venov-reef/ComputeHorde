@@ -182,14 +182,31 @@ class Collateral(CollateralBase):
             gas_limit: Maximum gas to use for the transaction
             value: Amount of ETH to send with the transaction (in Wei)
         """
+        nonce = None
+        gas_price = None
+        chain_id = None
+
         try:
+            nonce = w3.eth.get_transaction_count(account.address)
+            gas_price = w3.eth.gas_price
+            chain_id = w3.eth.chain_id
+
+            logger.info(
+                "Building and sending transaction from=%s nonce=%s gas_price=%s chain_id=%s value=%s",
+                account.address,
+                nonce,
+                gas_price,
+                chain_id,
+                value,
+            )
+
             transaction = function.build_transaction(
                 {
                     "from": account.address,
-                    "nonce": w3.eth.get_transaction_count(account.address),
+                    "nonce": nonce,
                     "gas": gas_limit,
-                    "gasPrice": w3.eth.gas_price,
-                    "chainId": w3.eth.chain_id,
+                    "gasPrice": gas_price,
+                    "chainId": chain_id,
                     "value": Wei(value),
                 }
             )
@@ -197,6 +214,17 @@ class Collateral(CollateralBase):
             signed_txn = w3.eth.account.sign_transaction(transaction, account.key)
             tx_hash = w3.eth.send_raw_transaction(signed_txn.raw_transaction)
         except Web3RPCError as e:
+            logger.warning(
+                "Web3RPCError while sending transaction: %s from=%s nonce=%s gas_price=%s chain_id=%s value=%s",
+                str(e),
+                account.address,
+                nonce,
+                gas_price,
+                chain_id,
+                value,
+                exc_info=True,
+            )
+
             raise _get_collateral_exception_from_web3(e) from e
         else:
             return tx_hash
