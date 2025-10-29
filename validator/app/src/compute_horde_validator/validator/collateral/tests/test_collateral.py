@@ -10,7 +10,12 @@ from web3 import Web3, exceptions
 
 from compute_horde_validator.validator.collateral.default import Collateral
 from compute_horde_validator.validator.collateral.tasks import get_miner_collateral
-from compute_horde_validator.validator.collateral.types import SlashCollateralError
+from compute_horde_validator.validator.collateral.types import (
+    CollateralException,
+    NonceTooLowCollateralException,
+    ReplacementUnderpricedCollateralException,
+    SlashCollateralError,
+)
 from compute_horde_validator.validator.models import Miner
 
 from .helpers.contexts import (
@@ -74,28 +79,6 @@ class TestSlashCollateral:
             hashlib.md5(evidence).digest(),
         )
         assert env.transaction_call == (expected_args, {"gas_limit": 200_000, "value": 0})
-
-    async def test_slash_collateral_when_build_and_send_transaction_raises_web3_rpc_error_is_wrapped(
-        self,
-    ) -> None:
-        miner_obj = await Miner.objects.acreate(hotkey="hk-map")
-
-        async with async_setup_collateral(
-            miners=[miner_obj],
-            uids={"hk-map": 1},
-            evm_addresses={"hk-map": "0x1234567890123456789012345678901234567890"},
-        ):
-            async with CollateralTestEnvironment(
-                build_and_send_transaction_side_effect=exceptions.Web3RPCError(
-                    message="replacement transaction underpriced"
-                )
-            ) as env:
-                with pytest.raises(
-                    SlashCollateralError, match="replacement transaction underpriced"
-                ):
-                    await env.collateral.slash_collateral(
-                        miner_hotkey=miner_obj.hotkey, url=SLASH_URL
-                    )
 
     async def test_slash_collateral_when_amount_not_positive_raises(self) -> None:
         miner_obj = await Miner.objects.acreate(hotkey="hk")
@@ -272,3 +255,62 @@ class TestSyncCollaterals:
                 assert [call.miner_address for call in env.web3_calls] == ["0XA"]
                 failure_events = [event for event in env.system_events.records if event.get("data")]
                 assert failure_events and failure_events[-1]["data"]["miner_hotkey"] == "hk1"
+
+
+class TestBuildAndSendTransaction:
+    @pytest.fixture
+    def w3(self) -> Mock:
+        w3 = Mock()
+        w3.eth = Mock()
+        w3.eth.get_transaction_count.return_value = 0
+        w3.eth.gas_price = 1
+        w3.eth.chain_id = 1
+        w3.eth.account = Mock()
+        w3.eth.account.sign_transaction.return_value = Mock(raw_transaction=b"\x00")
+        return w3
+
+    @pytest.fixture
+    def function(self) -> Mock:
+        function = Mock()
+
+        def _build_tx(params):
+            function.built_with = dict(params)
+            return {"to": "0xcontract", **params}
+
+        function.build_transaction.side_effect = _build_tx
+        return function
+
+    @pytest.fixture
+    def account(self) -> Mock:
+        return Mock(address="0xabc", key=b"\x00" * 32)
+
+    @pytest.mark.parametrize(
+        "message,expected_exc",
+        [
+            ("replacement transaction underpriced", ReplacementUnderpricedCollateralException),
+            ("nonce too low", NonceTooLowCollateralException),
+            ("unknown rpc failure", CollateralException),
+        ],
+    )
+    def test_maps_web3_rpc_error_to_custom_collateral_exceptions(
+        self,
+        w3: Mock,
+        function: Mock,
+        account: Mock,
+        message: str,
+        expected_exc: type[Exception],
+    ):
+        w3.eth.send_raw_transaction.side_effect = exceptions.Web3RPCError(message=message)
+
+        with pytest.raises(expected_exc):
+            Collateral()._build_and_send_transaction(
+                w3=w3, function=function, account=account, gas_limit=200_000
+            )
+
+    def test_reraises_non_web3_rpc_errors(self, w3: Mock, function: Mock, account: Mock):
+        w3.eth.send_raw_transaction.side_effect = ValueError("Other Value Error")
+
+        with pytest.raises(ValueError):
+            Collateral()._build_and_send_transaction(
+                w3=w3, function=function, account=account, gas_limit=200_000
+            )
