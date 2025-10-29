@@ -72,7 +72,10 @@ from .allowance import tasks as allowance_tasks  # noqa
 from .allowance.default import allowance
 from .clean_me_up import bittensor_client, get_single_manifest
 from .collateral import tasks as collateral_tasks  # noqa
-from .collateral.types import SlashCollateralError
+from .collateral.types import (
+    NonceTooLowCollateralException,
+    ReplacementUnderpricedCollateralException,
+)
 from .dynamic_config import aget_config
 from .models import AdminJobRequest, MinerManifest
 from .scoring import tasks as scoring_tasks  # noqa
@@ -906,24 +909,21 @@ def slash_collateral_task(self, job_uuid: str) -> None:
                 miner_hotkey=job.miner.hotkey,
                 url=f"job {job_uuid} cheated",
             )
-        except SlashCollateralError as e:
-            error_message = str(e).lower()
-            retriable_messages = ["replacement transaction underpriced", "nonce too low"]
-            is_retriable = any(message in error_message for message in retriable_messages)
-
-            if is_retriable:
-                logger.warning(f"Failed to slash collateral for job {job_uuid} ({e}). Retrying...")
-                raise self.retry(
-                    exc=e,
-                    countdown=get_exponential_backoff_interval(
-                        factor=SLASH_COLLATERAL_TASK_RETRY_FACTOR_SECONDS,
-                        retries=self.request.retries,
-                        maximum=SLASH_COLLATERAL_TASK_RETRY_MAXIMUM_SECONDS,
-                        full_jitter=False,
-                    ),
-                )
-
-            logger.error(f"Failed to slash collateral for job {job_uuid}: {e}")
+        except (NonceTooLowCollateralException, ReplacementUnderpricedCollateralException) as e:
+            countdown = get_exponential_backoff_interval(
+                factor=SLASH_COLLATERAL_TASK_RETRY_FACTOR_SECONDS,
+                retries=self.request.retries,
+                maximum=SLASH_COLLATERAL_TASK_RETRY_MAXIMUM_SECONDS,
+                full_jitter=False,
+            )
+            logger.warning(
+                "Retriable slashing error for job %s (%s). Retry %d in %ss",
+                job_uuid,
+                str(e),
+                self.request.retries + 1,
+                countdown,
+            )
+            raise self.retry(exc=e, countdown=countdown)
         except Exception as e:
             logger.error(f"Failed to slash collateral for job {job_uuid}: {e}")
         else:

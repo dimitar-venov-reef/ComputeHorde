@@ -5,6 +5,14 @@ class CollateralException(Exception):
     pass
 
 
+class NonceTooLowCollateralException(CollateralException):
+    pass
+
+
+class ReplacementUnderpricedCollateralException(CollateralException):
+    pass
+
+
 class SlashCollateralError(Exception):
     pass
 
