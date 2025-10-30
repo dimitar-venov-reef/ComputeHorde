@@ -26,6 +26,7 @@ from .base import CollateralBase
 from .types import (
     CollateralException,
     MinerCollateral,
+    NonceTooHighCollateralException,
     NonceTooLowCollateralException,
     ReplacementUnderpricedCollateralException,
     SlashCollateralError,
@@ -38,6 +39,7 @@ _cached_contract_address: str | None = None
 
 _ERROR_PATTERNS = [
     (NonceTooLowCollateralException, re.compile(r"nonce too low", re.I)),
+    (NonceTooHighCollateralException, re.compile(r"nonce too high", re.I)),
     (
         ReplacementUnderpricedCollateralException,
         re.compile(r"replacement transaction underpriced", re.I),

@@ -9,6 +9,10 @@ class NonceTooLowCollateralException(CollateralException):
     pass
 
 
+class NonceTooHighCollateralException(CollateralException):
+    pass
+
+
 class ReplacementUnderpricedCollateralException(CollateralException):
     pass
 

@@ -12,6 +12,7 @@ from django.utils.timezone import now
 from requests import Response
 
 from compute_horde_validator.validator.collateral.types import (
+    NonceTooHighCollateralException,
     NonceTooLowCollateralException,
     ReplacementUnderpricedCollateralException,
     SlashCollateralError,
@@ -391,6 +392,7 @@ def test__check_missed_synthetic_jobs(settings, bittensor):
     "exception",
     [
         NonceTooLowCollateralException("Nonce too low"),
+        NonceTooHighCollateralException("Nonce too high"),
         ReplacementUnderpricedCollateralException("replacement transaction underpriced"),
     ],
 )

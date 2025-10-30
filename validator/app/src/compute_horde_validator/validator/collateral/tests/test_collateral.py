@@ -12,6 +12,7 @@ from compute_horde_validator.validator.collateral.default import Collateral
 from compute_horde_validator.validator.collateral.tasks import get_miner_collateral
 from compute_horde_validator.validator.collateral.types import (
     CollateralException,
+    NonceTooHighCollateralException,
     NonceTooLowCollateralException,
     ReplacementUnderpricedCollateralException,
     SlashCollateralError,
@@ -289,6 +290,7 @@ class TestBuildAndSendTransaction:
         [
             ("replacement transaction underpriced", ReplacementUnderpricedCollateralException),
             ("nonce too low", NonceTooLowCollateralException),
+            ("nonce too high", NonceTooHighCollateralException),
             ("unknown rpc failure", CollateralException),
         ],
     )

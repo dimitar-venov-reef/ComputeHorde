@@ -73,6 +73,7 @@ from .allowance.default import allowance
 from .clean_me_up import bittensor_client, get_single_manifest
 from .collateral import tasks as collateral_tasks  # noqa
 from .collateral.types import (
+    NonceTooHighCollateralException,
     NonceTooLowCollateralException,
     ReplacementUnderpricedCollateralException,
 )
@@ -911,7 +912,11 @@ def slash_collateral_task(self, job_uuid: str) -> None:
                 miner_hotkey=job.miner.hotkey,
                 url=f"job {job_uuid} cheated",
             )
-        except (NonceTooLowCollateralException, ReplacementUnderpricedCollateralException) as e:
+        except (
+            NonceTooLowCollateralException,
+            NonceTooHighCollateralException,
+            ReplacementUnderpricedCollateralException,
+        ) as e:
             countdown = get_exponential_backoff_interval(
                 factor=SLASH_COLLATERAL_TASK_RETRY_FACTOR_SECONDS,
                 retries=self.request.retries,
@@ -930,6 +935,7 @@ def slash_collateral_task(self, job_uuid: str) -> None:
                 raise self.retry(exc=e, countdown=countdown)
             except (
                 NonceTooLowCollateralException,
+                NonceTooHighCollateralException,
                 ReplacementUnderpricedCollateralException,
                 self.MaxRetriesExceededError,
             ):
