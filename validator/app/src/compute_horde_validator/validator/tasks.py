@@ -94,6 +94,11 @@ COMPUTE_TIME_OVERHEAD_SECONDS = 30  # TODO: approximate a realistic value
 SLASH_COLLATERAL_TASK_MAX_RETRIES = 5
 SLASH_COLLATERAL_TASK_RETRY_FACTOR_SECONDS = 2
 SLASH_COLLATERAL_TASK_RETRY_MAXIMUM_SECONDS = 120
+SLASH_COLLATERAL_TASK_RETRIABLE_ERRORS = (
+    NonceTooLowCollateralException,
+    NonceTooHighCollateralException,
+    ReplacementUnderpricedCollateralException,
+)
 
 
 class ScheduleError(Exception):
@@ -912,11 +917,7 @@ def slash_collateral_task(self, job_uuid: str) -> None:
                 miner_hotkey=job.miner.hotkey,
                 url=f"job {job_uuid} cheated",
             )
-        except (
-            NonceTooLowCollateralException,
-            NonceTooHighCollateralException,
-            ReplacementUnderpricedCollateralException,
-        ) as e:
+        except SLASH_COLLATERAL_TASK_RETRIABLE_ERRORS as e:
             countdown = get_exponential_backoff_interval(
                 factor=SLASH_COLLATERAL_TASK_RETRY_FACTOR_SECONDS,
                 retries=self.request.retries,
@@ -933,12 +934,7 @@ def slash_collateral_task(self, job_uuid: str) -> None:
 
             try:
                 raise self.retry(exc=e, countdown=countdown)
-            except (
-                NonceTooLowCollateralException,
-                NonceTooHighCollateralException,
-                ReplacementUnderpricedCollateralException,
-                self.MaxRetriesExceededError,
-            ):
+            except (*SLASH_COLLATERAL_TASK_RETRIABLE_ERRORS, self.MaxRetriesExceededError):
                 logger.exception("Max retries reached for job %s", job_uuid)
         except Exception:
             logger.exception("Failed to slash collateral for job %s.", job_uuid)
