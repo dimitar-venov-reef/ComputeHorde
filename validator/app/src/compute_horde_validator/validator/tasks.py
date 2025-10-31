@@ -944,7 +944,7 @@ def slash_collateral_task(self, job_uuid: str) -> None:
 
             try:
                 raise self.retry(exc=e, countdown=countdown)
-            except (*SLASH_COLLATERAL_TASK_RETRIABLE_ERRORS, self.MaxRetriesExceededError):
+            except SLASH_COLLATERAL_TASK_RETRIABLE_ERRORS as e:
                 logger.exception("Max retries reached for job %s: %s", job_uuid, e)
         except Exception as e:
             logger.exception("Failed to slash collateral for job %s: %s", job_uuid, e)
