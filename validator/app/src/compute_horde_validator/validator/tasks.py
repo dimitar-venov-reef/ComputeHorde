@@ -98,6 +98,7 @@ SLASH_COLLATERAL_TASK_RETRIABLE_ERRORS = (
     NonceTooLowCollateralException,
     NonceTooHighCollateralException,
     ReplacementUnderpricedCollateralException,
+    ConnectionError,
 )
 
 

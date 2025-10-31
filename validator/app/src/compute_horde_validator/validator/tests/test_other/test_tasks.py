@@ -394,6 +394,7 @@ def test__check_missed_synthetic_jobs(settings, bittensor):
         NonceTooLowCollateralException("Nonce too low"),
         NonceTooHighCollateralException("Nonce too high"),
         ReplacementUnderpricedCollateralException("replacement transaction underpriced"),
+        ConnectionError("Failed to connect to RPC node"),
     ],
 )
 def test_slash_collateral_task_retriable_error_triggers_retry(settings, monkeypatch, exception):
